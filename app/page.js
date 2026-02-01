@@ -1397,8 +1397,7 @@ useEffect(() => {
       setUserName(session.user.email.split('@')[0]);
       setIsLoggedIn(true);
     }
-  }
-                                  };
+  });
 
   const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
     if (session?.user) {
