@@ -1,6 +1,13 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+);
 
 // ============================================
 // GOODBUDDI - Create a Great Day
@@ -207,6 +214,7 @@ const NavMenu = ({ isOpen, onClose, onNavigate, userName }) => {
     </div>
   );
 };
+
 
 // Profile Modal with Light Up Phrases Management
 const ProfileModal = ({ isOpen, onClose, phrases, onPhrasesUpdate, selectedPhraseIndex, onSelectPhrase }) => {
@@ -1009,10 +1017,49 @@ const AuthScreen = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onLogin(firstName || email.split('@')[0] || 'User');
+    setLoading(true);
+    setError('');
+
+    try {
+      if (isLogin) {
+        // Sign In
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        if (data.user) {
+          onLogin(data.user.email.split('@')[0], data.user.id);
+        }
+      } else {
+        // Sign Up
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: { first_name: firstName }
+          }
+        });
+        if (error) throw error;
+        if (data.user) {
+          // Update profile with first name
+          await supabase
+            .from('profiles')
+            .update({ first_name: firstName })
+            .eq('id', data.user.id);
+          onLogin(firstName || email.split('@')[0], data.user.id);
+        }
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -1026,13 +1073,15 @@ const AuthScreen = ({ onLogin }) => {
         <div className="auth-tabs">
           <button 
             className={`auth-tab ${isLogin ? 'active' : ''}`}
-            onClick={() => setIsLogin(true)}
+            onClick={() => { setIsLogin(true); setError(''); }}
           >Sign In</button>
           <button 
             className={`auth-tab ${!isLogin ? 'active' : ''}`}
-            onClick={() => setIsLogin(false)}
+            onClick={() => { setIsLogin(false); setError(''); }}
           >Sign Up</button>
         </div>
+
+        {error && <div className="auth-error">{error}</div>}
 
         <form onSubmit={handleSubmit}>
           {!isLogin && (
@@ -1066,11 +1115,12 @@ const AuthScreen = ({ onLogin }) => {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
               required
+              minLength={6}
             />
           </div>
 
-          <button type="submit" className="auth-btn">
-            {isLogin ? 'Sign In' : 'Create Account'}
+          <button type="submit" className="auth-btn" disabled={loading}>
+            {loading ? 'Please wait...' : (isLogin ? 'Sign In' : 'Create Account')}
           </button>
         </form>
 
@@ -1089,6 +1139,7 @@ const AuthScreen = ({ onLogin }) => {
 export default function GoodBuddi() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState('');
+  const [userId, setUserId] = useState(null); // ADD THIS LINE FOR SUPABASE
   const [currentView, setCurrentView] = useState('today');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [scratchpadText, setScratchpadText] = useState('');
@@ -1102,11 +1153,11 @@ export default function GoodBuddi() {
   const [showProfile, setShowProfile] = useState(false);
   
   const [lightUpPhrases, setLightUpPhrases] = useState([
-    "Let's get it poppin!",
-    "Today is your canvas. Paint it with intention.",
-    "Small steps create great journeys.",
-    "You have everything you need right now.",
-    "Energy flows where attention goes."
+    "let's get it poppin",
+    "let's have fun in whatever we do",
+    "take small steps towards big dreams",
+    "you got this, show them what's up!!!",
+    "take action from a great energy"
   ]);
   const [selectedPhraseIndex, setSelectedPhraseIndex] = useState(null);
   const [dailyPhrase, setDailyPhrase] = useState('');
@@ -1145,16 +1196,19 @@ export default function GoodBuddi() {
     }
   }, [selectedWeekDay, calendarData]);
 
-  const handleLogin = (name) => {
-    setUserName(name);
-    setIsLoggedIn(true);
-  };
+ const handleLogin = (name, id) => {
+  setUserName(name);
+  setUserId(id);
+  setIsLoggedIn(true);
+};
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setUserName('');
-    setShowUserMenu(false);
-  };
+ const handleLogout = async () => {
+  await supabase.auth.signOut();
+  setIsLoggedIn(false);
+  setUserName('');
+  setUserId(null);
+  setShowUserMenu(false);
+};
 
   const handleScratchpadChange = (text) => {
     setScratchpadText(text);
@@ -1335,7 +1389,29 @@ export default function GoodBuddi() {
     </div>
   );
 }
+// Check for existing session on load
+useEffect(() => {
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session?.user) {
+      setUserId(session.user.id);
+      setUserName(session.user.email.split('@')[0]);
+      setIsLoggedIn(true);
+    }
+  });
 
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    if (session?.user) {
+      setUserId(session.user.id);
+      setUserName(session.user.email.split('@')[0]);
+      setIsLoggedIn(true);
+    } else {
+      setIsLoggedIn(false);
+      setUserId(null);
+    }
+  });
+
+  return () => subscription.unsubscribe();
+}, []);
 // ============================================
 // STYLES
 // ============================================
@@ -1376,7 +1452,15 @@ const styles = `
     max-width: 420px;
     margin: 20px;
   }
-
+.auth-error {
+  background: #ffebee;
+  color: #c62828;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  text-align: center;
+}
   .auth-logo {
     text-align: center;
     margin-bottom: 32px;
