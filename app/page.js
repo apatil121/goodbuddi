@@ -9,6 +9,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 );
 
+
 // ============================================
 // GOODBUDDI - Create a Great Day
 // ============================================
@@ -214,7 +215,6 @@ const NavMenu = ({ isOpen, onClose, onNavigate, userName }) => {
     </div>
   );
 };
-
 
 // Profile Modal with Light Up Phrases Management
 const ProfileModal = ({ isOpen, onClose, phrases, onPhrasesUpdate, selectedPhraseIndex, onSelectPhrase }) => {
@@ -1139,7 +1139,7 @@ const AuthScreen = ({ onLogin }) => {
 export default function GoodBuddi() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userName, setUserName] = useState('');
-  const [userId, setUserId] = useState(null); // ADD THIS LINE FOR SUPABASE
+  const [userId, setUserId] = useState(null);
   const [currentView, setCurrentView] = useState('today');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [scratchpadText, setScratchpadText] = useState('');
@@ -1153,11 +1153,11 @@ export default function GoodBuddi() {
   const [showProfile, setShowProfile] = useState(false);
   
   const [lightUpPhrases, setLightUpPhrases] = useState([
-    "let's get it poppin",
-    "let's have fun in whatever we do",
-    "take small steps towards big dreams",
-    "you got this, show them what's up!!!",
-    "take action from a great energy"
+    "Let's get it poppin!",
+    "Today is your canvas. Paint it with intention.",
+    "Small steps create great journeys.",
+    "You have everything you need right now.",
+    "Energy flows where attention goes."
   ]);
   const [selectedPhraseIndex, setSelectedPhraseIndex] = useState(null);
   const [dailyPhrase, setDailyPhrase] = useState('');
@@ -1196,19 +1196,43 @@ export default function GoodBuddi() {
     }
   }, [selectedWeekDay, calendarData]);
 
- const handleLogin = (name, id) => {
-  setUserName(name);
-  setUserId(id);
-  setIsLoggedIn(true);
-};
+  // Check for existing session on load
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+        setUserName(session.user.email.split('@')[0]);
+        setIsLoggedIn(true);
+      }
+    });
 
- const handleLogout = async () => {
-  await supabase.auth.signOut();
-  setIsLoggedIn(false);
-  setUserName('');
-  setUserId(null);
-  setShowUserMenu(false);
-};
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserId(session.user.id);
+        setUserName(session.user.email.split('@')[0]);
+        setIsLoggedIn(true);
+      } else {
+        setIsLoggedIn(false);
+        setUserId(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogin = (name, id) => {
+    setUserName(name);
+    setUserId(id);
+    setIsLoggedIn(true);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setIsLoggedIn(false);
+    setUserName('');
+    setUserId(null);
+    setShowUserMenu(false);
+  };
 
   const handleScratchpadChange = (text) => {
     setScratchpadText(text);
@@ -1389,29 +1413,7 @@ export default function GoodBuddi() {
     </div>
   );
 }
-// Check for existing session on load
-useEffect(() => {
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    if (session?.user) {
-      setUserId(session.user.id);
-      setUserName(session.user.email.split('@')[0]);
-      setIsLoggedIn(true);
-    }
-  });
 
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-    if (session?.user) {
-      setUserId(session.user.id);
-      setUserName(session.user.email.split('@')[0]);
-      setIsLoggedIn(true);
-    } else {
-      setIsLoggedIn(false);
-      setUserId(null);
-    }
-  });
-
-  return () => subscription.unsubscribe();
-}, []);
 // ============================================
 // STYLES
 // ============================================
@@ -1452,15 +1454,7 @@ const styles = `
     max-width: 420px;
     margin: 20px;
   }
-.auth-error {
-  background: #ffebee;
-  color: #c62828;
-  padding: 12px;
-  border-radius: 8px;
-  margin-bottom: 16px;
-  font-size: 14px;
-  text-align: center;
-}
+
   .auth-logo {
     text-align: center;
     margin-bottom: 32px;
@@ -1546,6 +1540,16 @@ const styles = `
     margin-top: 24px;
     font-size: 13px;
     color: #666;
+  }
+
+  .auth-error {
+    background: #ffebee;
+    color: #c62828;
+    padding: 12px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    text-align: center;
   }
 
   .billboard {
